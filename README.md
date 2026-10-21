@@ -1,232 +1,148 @@
-<div align="center">
-
-<h1 align="center">
-  <img src=".github/static/bench-icon.png" alt="zentinel-bench icon" width="96" />
-  <br>
-  zentinel-bench
-</h1>
-
 <p align="center">
-  <em>Fair, reproducible benchmarking for reverse proxies.</em><br>
-  <em>Zentinel vs Envoy vs HAProxy vs Nginx.</em>
-</p>
-
-<p align="center">
-  <a href="https://mise.jdx.dev">
-    <img alt="mise" src="https://img.shields.io/badge/mise-task%20runner-4e9a06?style=for-the-badge">
-  </a>
-  <a href="https://www.docker.com">
-    <img alt="Docker" src="https://img.shields.io/badge/Docker-containers-2496ED?logo=docker&logoColor=white&style=for-the-badge">
-  </a>
-  <a href="LICENSE">
-    <img alt="License" src="https://img.shields.io/badge/License-MIT-c6a0f6?style=for-the-badge">
+  <a href="https://zentinelproxy.io">
+    <picture>
+      <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/zentinelproxy/design/main/marks/lockup/zentinel-lockup-dark.svg">
+      <img alt="Zentinel" src="https://raw.githubusercontent.com/zentinelproxy/design/main/marks/lockup/zentinel-lockup-light.svg" height="52">
+    </picture>
   </a>
 </p>
 
+<h3 align="center">Zentinel benchmarks</h3>
+
+<p align="center">A reproducible harness for benchmarking Zentinel against Envoy, HAProxy and Nginx with equivalent configurations.</p>
+
 <p align="center">
-  <a href="docs/CONCEPT.md">Methodology</a> •
-  <a href="#quick-start">Quick Start</a> •
-  <a href="#scenarios">Scenarios</a> •
-  <a href="https://github.com/zentinelproxy/zentinel">Zentinel</a>
+  <a href="docs/CONCEPT.md">Methodology</a> &middot;
+  <a href="https://docs.zentinelproxy.io">Docs</a> &middot;
+  <a href="https://github.com/zentinelproxy">All repositories</a>
 </p>
 
-<hr />
+The harness starts each proxy in Docker in front of the same backend, drives
+it with a load generator at a fixed request rate, and stores the raw output,
+per-run JSON and a summary with machine metadata for every run. All four
+proxies get equivalent settings, with access logging off. Today it implements
+one scenario, `passthrough`; the others in [`scenarios/tier1.yaml`](scenarios/tier1.yaml)
+are defined but have no proxy configurations yet.
 
-</div>
+## Quick start
 
-Benchmarking framework for comparing [Zentinel](https://github.com/zentinelproxy/zentinel) against Envoy, HAProxy, and Nginx with equivalent configurations and rigorous methodology.
-
----
-
-## Quick Start
-
-### Prerequisites
-
-- [mise](https://mise.jdx.dev) - Task runner and tool manager
-- [Docker](https://www.docker.com) - For containerized proxies
-
-### Setup
+Requires [mise](https://mise.jdx.dev) and Docker (with the `docker-compose`
+command, which the tasks call).
 
 ```bash
-# Trust and install dependencies
 mise trust
-mise run setup
+mise run setup                 # mise tools (hey, k6, wrk), oha via cargo, Docker check
+mise run pull                  # Envoy, HAProxy, Nginx and backend images
+mise run build-zentinel        # zentinel:optimized from ../zentinel (or set ZENTINEL_IMAGE)
+
+mise run quick:envoy           # start Envoy, 30-second run, stop
+mise run bench:zentinel        # full benchmark (warmup + 3 runs), passthrough
+mise run bench:all             # zentinel, envoy, haproxy, nginx in turn, 10 s cool-down between
+mise run compare --latest 1    # markdown comparison of the latest run per proxy (needs jq)
 ```
-
-This installs load generators (hey, k6, wrk, oha) and validates your environment.
-
-### Run a Quick Benchmark
-
-```bash
-# Start a proxy
-mise run up envoy
-
-# Run quick 30-second benchmark
-mise run quick
-
-# Stop
-mise run down
-```
-
-### Full Benchmark
-
-```bash
-# Full benchmark with multiple runs
-mise run bench envoy passthrough
-
-# With custom parameters
-mise run bench envoy passthrough --duration 120 --rate 50000
-
-# Compare all proxies
-mise run bench all passthrough
-```
-
----
 
 ## Tasks
 
-Run `mise tasks` to see all available tasks:
+`mise tasks` lists them all.
 
-| Task | Description |
-|------|-------------|
-| `mise run setup` | Install dependencies and validate environment |
-| `mise run bench <proxy> <scenario>` | Run full benchmark |
-| `mise run quick [url]` | Quick 30-second benchmark |
-| `mise run up <proxy>` | Start proxy container |
-| `mise run down` | Stop all containers |
-| `mise run check-tools` | Show available load generators |
-| `mise run results` | List benchmark results |
-| `mise run clean` | Clean results directory |
+| Task | What it does |
+|---|---|
+| `mise run setup` | Install load generators and check the environment |
+| `mise run pull` | Pull the Envoy, HAProxy, Nginx and backend images |
+| `mise run build-zentinel` | Build `zentinel:optimized` from `$ZENTINEL_DIR` (default `../zentinel`) |
+| `mise run up:<proxy>` | Start one proxy on `localhost:8080` (`zentinel`, `envoy`, `haproxy`, `nginx`) |
+| `mise run quick:<proxy>` | Start the proxy, run a 30-second benchmark, stop it |
+| `mise run bench:<proxy> [scenario] [options]` | Start the proxy, run the full benchmark, stop it |
+| `mise run bench:all [scenario]` | Run `bench:<proxy>` for all four proxies |
+| `mise run bench:native` | Benchmark a native `zentinel` release binary (`$ZENTINEL_BIN`) against a local `miniserve` backend, no Docker |
+| `mise run quick-main [url]` | 30-second benchmark against a proxy that is already running |
+| `mise run compare [--latest n] [--scenario s] [--output file] [--json]` | Comparison report from `results/` |
+| `mise run results` | List recent results |
+| `mise run down` / `logs` / `ps` | Stop, follow logs of, or list the containers |
+| `mise run check-tools` | Show which load generators are installed |
+| `mise run install-oha` / `install-wrk2` | Install oha (cargo); print wrk2 build steps |
+| `mise run clean` | Delete everything in `results/` |
 
----
-
-## Repository Structure
-
-```
-zentinel-bench/
-├── mise.toml           # Tool dependencies and short tasks
-├── .mise/tasks/        # File-based tasks (bench, quick, setup)
-├── docs/               # Methodology and design docs
-│   └── CONCEPT.md      # Framework design document
-├── configs/            # Equivalent proxy configurations
-│   ├── zentinel/       # Zentinel KDL configs
-│   ├── envoy/          # Envoy YAML configs
-│   ├── haproxy/        # HAProxy configs
-│   └── nginx/          # Nginx configs
-├── scenarios/          # Test scenario definitions
-├── docker/             # Docker Compose infrastructure
-└── results/            # Benchmark results (gitignored)
-```
-
----
-
-## Scenarios
-
-### Tier 1: Core Performance
-
-| Scenario | Description |
-|----------|-------------|
-| `passthrough` | Simple L7 proxy, no processing |
-| `routing` | 100+ routes, path-based matching |
-| `loadbalancing` | Round-robin, least-conn, P2C |
-| `tls` | HTTPS termination |
-| `connection_scaling` | 1K, 10K, 50K concurrent connections |
-
-### Tier 2: Zentinel-Specific
-
-| Scenario | Description |
-|----------|-------------|
-| `agent_pipeline` | External agent processing overhead |
-| `rate_limiting` | Token bucket accuracy under load |
-| `circuit_breaker` | Trip/recovery behavior |
-
----
+Options for `bench:<proxy>`: `--duration`, `--connections`, `--threads`,
+`--rate`, `--warmup`, `--runs`, `--target`, `--tool <oha|wrk2|wrk|hey|k6>`,
+`--name`.
 
 ## Configuration
 
-### Environment Variables
+Defaults are set in `mise.toml` and can be overridden in the shell:
 
-Set in `mise.toml` or override in your shell:
+| Variable | Default | Meaning |
+|---|---|---|
+| `BENCH_DURATION` | `60` | Seconds per run (`quick` uses 30 unless set) |
+| `BENCH_CONNECTIONS` | `100` | Concurrent connections |
+| `BENCH_RATE` | `10000` | Target requests per second |
+| `BENCH_WARMUP` | `10` | Warmup seconds |
+| `BENCH_RUNS` | `3` | Runs per benchmark |
+| `BENCH_TARGET` | `http://localhost:8080` | URL under test |
+| `ZENTINEL_IMAGE` | `zentinel:optimized` | Zentinel image used by `up:zentinel` |
 
-```bash
-export BENCH_DURATION=60      # Test duration (seconds)
-export BENCH_CONNECTIONS=100  # Concurrent connections
-export BENCH_RATE=10000       # Target requests/second
-export BENCH_WARMUP=10        # Warmup duration (seconds)
-export BENCH_RUNS=3           # Number of runs
-export BENCH_TARGET=http://localhost:8080
-```
+Without `--tool`, the first installed load generator is used, in this order:
+oha (HdrHistogram, recommended), wrk2 (corrects coordinated omission), wrk
+(no correction), hey, k6.
 
-### Load Generator Priority
+## Scenarios
 
-The framework auto-detects load generators in this order:
+| Scenario | Status |
+|---|---|
+| `passthrough` | Implemented: plain L7 proxying to one backend, configs for all four proxies |
+| `routing`, `loadbalancing`, `tls`, `connection_scaling` | Defined in `scenarios/tier1.yaml`, no configs yet |
+| `agent_pipeline`, `rate_limiting`, `circuit_breaker` | Planned (Zentinel-specific), not defined yet |
 
-1. **oha** - Rust-based, HdrHistogram, recommended
-2. **wrk2** - Corrects coordinated omission
-3. **wrk** - Fast but no coordinated omission correction
-4. **hey** - Simple HTTP load generator
-5. **k6** - Scriptable, good for complex scenarios
+The scenario argument is recorded with the results, but the containers always
+mount the passthrough configurations (`docker/docker-compose.yaml`), so another
+scenario name does not change what is measured yet.
 
-Install the recommended generator:
+## Configuration equivalence
 
-```bash
-mise run install-oha
-```
+All proxies run with:
 
----
+- the same worker count (auto-detected), connection limits, keepalive and timeouts
+- access logging disabled, which matters for a fair comparison
 
-## Configuration Equivalence
-
-All proxies are configured with equivalent settings:
-
-- Same worker thread count (auto-detect)
-- Same connection limits
-- Same keepalive settings
-- **Access logging disabled** (critical for fair comparison)
-- Same timeout values
-
-See [docs/CONCEPT.md](docs/CONCEPT.md) for detailed equivalence matrix.
-
----
-
-## Metrics Collected
-
-- **Throughput**: requests/second, bytes/second
-- **Latency**: p50, p75, p90, p95, p99, p99.9, max
-- **Resources**: CPU%, memory MB, file descriptors
-- **Errors**: connection errors, timeouts, HTTP errors
-
----
+The equivalence matrix is in [docs/CONCEPT.md](docs/CONCEPT.md).
 
 ## Results
 
-Results are saved to `results/<proxy>/<scenario>/<timestamp>/`:
+Each run writes `results/<timestamp>_<proxy>_<scenario>/`:
 
 ```
-results/
-└── envoy/
-    └── passthrough/
-        └── 20241229_143022/
-            ├── run_1.txt
-            ├── run_2.txt
-            ├── run_3.txt
-            ├── params.json
-            └── system_info.txt
+results/20251230_093411_envoy_passthrough/
+├── metadata.json      # proxy and tool versions, image, machine, parameters
+├── aggregated.json    # mean requests/s and p50/p99 across runs
+├── summary.md         # human-readable summary
+└── runs/
+    ├── run_1.json     # load generator output (latency percentiles, histogram, errors)
+    └── run_1.txt
 ```
 
----
+`results/` is tracked in git, with a comparison in
+[`results/report.md`](results/report.md). The committed runs are from one
+Apple M4 laptop (December 2025 and January 2026) at a target rate of 10,000
+requests/s, so they compare latency at a fixed rate, not maximum throughput.
 
 ## Methodology
 
-See [docs/CONCEPT.md](docs/CONCEPT.md) for:
+[docs/CONCEPT.md](docs/CONCEPT.md) covers coordinated omission, warmup and
+cool-down, repeated runs and median reporting, and common pitfalls. Parts of
+it (runners, analysis and Nighthawk) describe the planned design rather than
+what is in the repository today.
 
-- Coordinated omission correction
-- Warmup and cooldown procedures
-- Statistical rigor (multiple runs, median reporting)
-- Common pitfalls to avoid
+## Related
 
----
+- [Zentinel](https://github.com/zentinelproxy/zentinel): the proxy under test
+- [zentinelproxy.io/benchmarks](https://zentinelproxy.io/benchmarks/): published benchmark results
 
 ## License
 
-MIT
+This repository has no `LICENSE` file yet.
+
+---
+
+<p align="center">
+  <sub>Part of <a href="https://zentinelproxy.io">Zentinel</a>, the security-first reverse proxy. The shisa guards the gate.</sub>
+</p>
