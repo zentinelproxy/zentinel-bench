@@ -139,7 +139,7 @@ what is in the repository today.
 
 ## License
 
-This repository has no `LICENSE` file yet.
+Apache-2.0, see [`LICENSE`](LICENSE).
 
 ---
 
